@@ -600,7 +600,6 @@ def PFsmoothing(self,method='RLS',PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDF
     if (method=='RLS'):
         if (dHitssmoothingFactor==-1):
             dHitssmoothingFactor=self.smoothingFactor*2
-
         if (CDFsmoothingFactor==-1):
             CDFsmoothingFactor=self.smoothingFactor*2
         if (PFsmoothingFactor==-1):
@@ -613,8 +612,21 @@ def PFsmoothing(self,method='RLS',PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDF
         self.smoothCDF=self.RLS(self.drank,self.CDF,self.ndiscretization,CDFsmoothingFactor)
         self.smoothPF=self.RLS(self.drank,self.PF,self.ndiscretization,PFsmoothingFactor)
         self.smoothDPF=self.RLS(self.drank,self.DPF,self.ndiscretization,DPFsmoothingFactor)
+    elif (method=='wmeans'):
+        self.smoothdHits=self.meanWindowSmoothing(self.drank,self.dHits,self.ndiscretization,-1)
+        self.smoothCDF=self.meanWindowSmoothing(self.drank,self.CDF,self.ndiscretization,-1)
+        self.smoothPF=self.meanWindowSmoothing(self.drank,self.PF,self.ndiscretization,-1)
+        def mfunc(x):
+            return x[np.argmax(np.abs(x))]
+
+        self.smoothDPF=self.meanWindowSmoothing(self.drank,self.DPF,self.ndiscretization,-1,mfunc)
+
+
+
+
     else:
         print("method=",method,"is not implemented!")
+
 
 
 def boostrapPFsmoothing(self,drank,dHits,CDF,PF,DPF,PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDFsmoothingFactor=-1,dHitssmoothingFactor=-1,method='RLS' ):
@@ -638,6 +650,21 @@ def boostrapPFsmoothing(self,drank,dHits,CDF,PF,DPF,PFsmoothingFactor=-1,DPFsmoo
     else:
         print("method=",method,"is not implemented!")
     return smoothdHits,smoothCDF,smoothPF,smoothDPF
+
+
+def meanWindowSmoothing(self,X,Y,n,smoothingFactor=-1,mfunction=np.mean):
+    Yg=np.zeros(n)
+    #Smoothing the density using a mean filter, it is similar to a uniform kernel with a window size=smoothing
+    if (smoothingFactor==-1):
+        nw=min(max(int(n/5),50),300)
+        smoothing=int(n/nw)
+        #density.smwindow=smoothing
+    if (smoothing>0):
+        Yg[0:smoothing]= mfunction(Y[0:smoothing])
+        Yg[(n-smoothing):n]=  mfunction(Y[(n-smoothing):n])
+        for i in range(smoothing,n-smoothing):
+            Yg[i]=mfunction(Y[(i-smoothing):(i+smoothing)])
+    return Yg
 
 
 def RLS(self,X,Y,n,smoothingFactor=-1):
@@ -872,7 +899,7 @@ def rank2prob(self,rank,kind='PF'):
     prob=np.zeros(nr)
     j=0
     deltammr=0.5*(self.maxr-self.minr)/self.ndiscretization
-    for i in range(nd):
+    for i in range(nd-1):
         while(j<nr  and  (rank[indices[j]])<=(self.drank[i+1])):
             if (rank[indices[j]]>=self.minr and rank[indices[j]]<=self.maxr):
                 deltar=self.drank[i]-self.drank[i-1]
@@ -1114,11 +1141,11 @@ def tickPositions(self,sorted_ranks,Thresholds, HpFA, n = 30):
 
 ##########################################BEGIN METHOD __plotTOC#####################################################
 
-def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker    #self.tickPositions(self.dThresholds)
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
-
+    #plt.tight_layout()
     if (autodpi==True):
         dpi=int((height+width)*120/(800+920))
 
@@ -1133,12 +1160,47 @@ def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height
         TS = np.linspace(self.Thresholds[0], self.Thresholds[-1], 30)
 
     P = list([])
+    idata=list([])
     for t in TS:
         ix = np.argmin((self.unique_ranks - t)**2)
         P.append(self.unique_rank_positions[ix])
+        idata.append(ix)
 
     self.P = np.array(P)
     self.TS = np.around(TS, 1)
+
+    #Preparing the overlaped plot with the top and right axis for the CDF
+    ax2 = fig.add_subplot(111, label = "2", frame_on = False)
+
+    #posiciones de los ticks chiquitos del eje secundario
+    P, Q = self.tickPositions(self.rank[self.isorted],self.Thresholds[self.iunique],self.HpFA[self.iunique])
+
+
+
+    ax2.set_xticks(P)
+    ax2.xaxis.set_minor_locator(ticker.FixedLocator(P))
+    tlabel='$X$'
+    if (self.featureName!='X'):
+        tlabel='$X=$'+self.featureName
+
+    #print(tlabel)
+    ax2.set_xlabel(tlabel, color = "tab:blue")
+    ax2.set_ylabel("P($x \leq Threshold~~ | ~~y=presence$)", color = "tab:blue")
+    ax2.tick_params(labeltop = True)
+    ax2.tick_params(labelright = True)
+    ax2.tick_params(labelbottom = False)
+    ax2.tick_params(labelleft = False)
+    ax2.tick_params(labelsize=labelsize)
+    ax2.xaxis.tick_top()
+
+    #los ticks grandes
+    n = np.argmax(self.P[1:]-self.P[:-1])
+    ax2.xaxis.set_major_locator(ticker.FixedLocator(np.unique(np.array(self.P)[[0, n, n+1, -1]])))
+    #las etiquetas de los ticks grandes
+    ax2.set_xticklabels(np.unique(np.array(self.TS)[[0, n, n+1, -1]]), rotation = 90)
+    if ('intersections' in options):
+        ax1.vlines(np.array(self.P)[[ n, n+1]],0,self.np,linestyles='dotted',colors="tab:orange",alpha=0.5)
+        ax1.hlines(self.Hits[np.array(self.P)[[ n, n+1]]],0,self.ndata,linestyles='dotted',colors="tab:orange",alpha=0.5)
 
     #parallelogram coordinates
     rx = np.array([0, self.np, self.ndata, self.ndata-self.np, 0])
@@ -1146,7 +1208,7 @@ def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height
 
     ax1.set_ylim(0, 1.01*self.np)
     ax1.set_xlim(-0.001, 1.01*self.ndata)
-    ax1.tick_params(labelsize=7)
+    ax1.tick_params(labelsize=labelsize)
     ax1.text(0.575*self.ndata, 0.025*self.np, 'AR = ')
     ax1.text(0.675*self.ndata, 0.025*self.np, str(round(self.areaRatio, 4)))
 
@@ -1181,36 +1243,7 @@ def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height
     ax1.legend(loc = 'upper left')
 
 
-    #Preparing the overlaped plot with the top and right axis for the CDF
-    ax2 = fig.add_subplot(111, label = "2", frame_on = False)
 
-    #posiciones de los ticks chiquitos del eje secundario
-    P, Q = self.tickPositions(self.rank[self.isorted],self.Thresholds[self.iunique],self.HpFA[self.iunique])
-
-    ax2.set_xticks(P)
-    ax2.xaxis.set_minor_locator(ticker.FixedLocator(P))
-    tlabel='$X$'
-    if (self.featureName!='X'):
-        tlabel='$X=$'+self.featureName
-
-    #print(tlabel)
-    ax2.set_xlabel(tlabel, color = "tab:blue")
-    ax2.set_ylabel("P($x \leq Threshold~~ | ~~y=presence$)", color = "tab:blue")
-    ax2.tick_params(labeltop = True)
-    ax2.tick_params(labelright = True)
-    ax2.tick_params(labelbottom = False)
-    ax2.tick_params(labelleft = False)
-    ax2.tick_params(labelsize=7)
-    ax2.xaxis.tick_top()
-
-    #los ticks grandes
-
-    n = np.argmax(self.P[1:]-self.P[:-1])
-
-    ax2.xaxis.set_major_locator(ticker.FixedLocator(np.unique(np.array(self.P)[[0, n, n+1, -1]])))
-
-    #las etiquetas de los ticks grandes
-    ax2.set_xticklabels(np.unique(np.array(self.TS)[[0, n, n+1, -1]]), rotation = 90)
 
     ax2.yaxis.tick_right()
     ax2.yaxis.set_minor_locator(AutoMinorLocator())
@@ -1231,7 +1264,7 @@ def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height
 
 ##########################################BEGIN METHOD __plotDiscretizedTOC#####################################################
 
-def __plotDiscretizedTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotDiscretizedTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
@@ -1264,7 +1297,7 @@ def __plotDiscretizedTOC(self,filename = '',title='default',TOCname='TOC',kind='
 
     ax1.set_ylim(0, 1.01*self.np)
     ax1.set_xlim(-0.001, 1.01*self.ndata)
-    ax1.tick_params(labelsize=7)
+    ax1.tick_params(labelsize=labelsize)
     ax1.text(0.575*self.ndata, 0.025*self.np, 'AUC = ')
     ax1.text(0.675*self.ndata, 0.025*self.np, str(round(self.areaDRatio, 4)))
 
@@ -1328,7 +1361,7 @@ def __plotDiscretizedTOC(self,filename = '',title='default',TOCname='TOC',kind='
     ax2.tick_params(labelright = True)
     ax2.tick_params(labelbottom = False)
     ax2.tick_params(labelleft = False)
-    ax2.tick_params(labelsize=7)
+    ax2.tick_params(labelsize=labelsize)
     ax2.xaxis.tick_top()
 
     #los ticks grandes
@@ -1358,7 +1391,7 @@ def __plotDiscretizedTOC(self,filename = '',title='default',TOCname='TOC',kind='
 
 
 
-def __plotCDF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotCDF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
@@ -1368,11 +1401,11 @@ def __plotCDF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
 
     fig, ax1 = plt.subplots(1, 1, figsize=(width/dpi,height/dpi), dpi=dpi)
 
-    title = "Cummulative Distribution Function"
+    title = "Cumulative Distribution Function"
     ax1.set_title(title,va='baseline')
     ax1.set_ylim(0, 1.01)
     ax1.set_xlim(self.minr-0.01*(self.maxr-self.minr),self.maxr)
-    ax1.tick_params(labelsize=7)
+    ax1.tick_params(labelsize=labelsize)
     #ax1.text(0.575*self.maxr, 0.025, 'AUC = ')
     #ax1.text(0.675*self.maxr, 0.025, str(round(self.areaDRatio, 4)))
 
@@ -1427,7 +1460,7 @@ def __plotCDF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
 
 ##########################################END METHOD __plotTOC#######################################################
 
-def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
@@ -1438,15 +1471,15 @@ def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=80
         dpi=int((height+width)*120/(800+920))
 
     fig, ax1 = plt.subplots(1, 1, figsize=(width/dpi,height/dpi), dpi=dpi)
-
-    if (kind=='smoothPF'):
-        title = "Smoothed Probability Density Function (conditional to presence)"
-    else:
-        title = "Probability Density Function (conditional to presence)"
+    if (title=='default'):
+        if (kind=='smoothPF'):
+            title = "Smoothed Probability Density Function (conditional to presence)"
+        else:
+            title = "Probability Density Function (conditional to presence)"
 
     ax1.set_ylim(0, 1.01*np.max(self.PF))
     ax1.set_xlim(self.minr-0.01*(self.maxr-self.minr),self.maxr)
-    ax1.tick_params(labelsize=7)
+    ax1.tick_params(labelsize=labelsize)
     #ax1.text(0.575*self.maxr, 0.025, 'AUC = ')
     #ax1.text(0.675*self.maxr, 0.025, str(round(self.areaDRatio, 4)))
 
@@ -1457,19 +1490,31 @@ def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=80
     #print(options)
     #print('quartiles' in options)
     if ('vlines' in options):
-        ax1.vlines(self.drank,self.PF,maxpf,colors="tab:gray",alpha=0.025,linewidth = 1)
-        ax1.vlines(self.drank,0,self.PF,colors="#2c03fc",alpha=0.025,linewidth = 1)
+        if (kind=='smoothPF'):
+            ax1.vlines(self.drank,self.smoothPF,maxpf,colors="tab:gray",alpha=0.5,linewidth = 0.2)
+            if ('quartiles' in options):
+                ax1.vlines(self.drank,0,self.smoothPF,colors="#2c03fc",alpha=0.05,linewidth = 0.1)
+            else:
+                ax1.vlines(self.drank,0,self.smoothPF,colors="#2c03fc",alpha=0.5,linewidth = 0.2)
+        else:
+            ax1.vlines(self.drank,self.PF,maxpf,colors="tab:gray",alpha=0.5,linewidth = 0.2)
+            if ('quartiles' in options):
+                ax1.vlines(self.drank,0,self.PF,colors="#2c03fc",alpha=0.05,linewidth = 0.1)
+            else:
+                ax1.vlines(self.drank,0,self.PF,colors="#2c03fc",alpha=0.5,linewidth = 0.2)
+
+
     if ('quartiles' in options):
         i1=np.argmax(self.CDF>0.25)
         i2=np.argmax(self.CDF>0.5)
         i3=np.argmax(self.CDF>0.75)
-        ax1.fill_between(self.drank[0:i1+1],self.PF[0:i1+1],color='#6042f5',alpha=0.45)
-        ax1.fill_between(self.drank[i1:i2+1],self.PF[i1:i2+1],color='#c242f5',alpha=0.45)
-        ax1.fill_between(self.drank[i2:i3+1],self.PF[i2:i3+1],color='#fc0303',alpha=0.45)
-        ax1.fill_between(self.drank[i3:],self.PF[i3:],color='#c6fc03',alpha=0.45) ##fc3d03
+        ax1.fill_between(self.drank[0:i1+1],self.PF[0:i1+1],color='#fc9d03',alpha=0.55)
+        ax1.fill_between(self.drank[i1:i2+1],self.PF[i1:i2+1],color='#fc0703',alpha=0.55)
+        ax1.fill_between(self.drank[i2:i3+1],self.PF[i2:i3+1],color='#ca03fc',alpha=0.55)
+        ax1.fill_between(self.drank[i3:],self.PF[i3:],color='#016e32',alpha=0.55) ##fc3d03
 
     marker='-o'
-    markersize=1
+    markersize=0.5
     if (self.kind=='discrete'):
         marker='h'
         markersize=3
@@ -1477,16 +1522,16 @@ def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=80
             ax1.vlines(self.drank,0,self.smoothPF,colors="#4287f5",alpha=0.95,linewidth = 3)
         else:
             ax1.vlines(self.drank,0,self.PF,colors="#4287f5",alpha=0.95,linewidth = 3)
-        title="Mass Probability Function (conditional to presence)"
-        if (kind=='smoothPF'):
-            title="Regularized Mass Probability Function (conditional to presence)"
+        if (title=='default'):
+            title="Mass Probability Function (conditional to presence)"
+            if (kind=='smoothPF'):
+                title="Regularized Mass Probability Function (conditional to presence)"
 
     ax1.set_title(title,va='baseline')
     #TOC thresholds
     if (kind=='smoothPF'):
-        ax1.plot(self.drank,self.PF,marker,markersize = markersize,label = 'Original PF', linewidth = 0.5,color = "#b7bec9" )
         ax1.plot(self.drank,self.smoothPF,marker,markersize = markersize,label = 'Smoothed PF', linewidth = 1,color = "#4287f5")
-
+        #ax1.plot(self.drank,self.PF,marker,markersize = markersize/4,label = 'Original PF', linewidth = 0.4,color = "#fa4807" )
     else:
         ax1.plot(self.drank, self.PF,marker,markersize = markersize,label = TOCname, linewidth = 1,color = "#4287f5")
 
@@ -1533,7 +1578,7 @@ def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=80
 
 
 
-def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
@@ -1546,23 +1591,29 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
         dpi=int((height+width)*120/(800+920))
 
     fig, ax1 = plt.subplots(1, 1, figsize=(width/dpi,height/dpi), dpi=dpi)
-
-    if (kind=='smoothDPF'):
-        title = "Smoothed First Derivative of the Probability Density Function (conditional to presence)"
-    else:
-        title = "First Derivative of the Probability Density Function (conditional to presence)"
+    if(title=='default'):
+        if (kind=='smoothDPF'):
+            title = "Smoothed First Derivative of the Probability Density Function"
+        else:
+            title = "First Derivative of the Probability Density Function"
 
     ax1.set_ylim(1.01*min(minDPF,minSmoothDPF), 1.01*max(maxDPF,maxSmoothDPF))
     ax1.set_xlim(self.minr-0.01*(self.maxr-self.minr),self.maxr)
-    ax1.tick_params(labelsize=7)
+    ax1.tick_params(labelsize=labelsize)
 
     #Ploting the uniform distribution line
     ax1.plot(np.array([self.minr, self.maxr]), np.array([0,0]),'b-.',
     label = "Random classifier")
 
     if ('vlines' in options):
-        ax1.vlines(self.drank,self.DPF,maxdpf,colors="tab:gray",alpha=0.1,linewidth = 1)
-
+        if (kind=='smoothDPF'):
+            ax1.vlines(self.drank[self.smoothDPF>0],self.smoothDPF[self.smoothDPF>0],maxDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.smoothDPF<0],self.smoothDPF[self.smoothDPF<0],minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.smoothDPF==0],maxDPF,minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+        else:
+            ax1.vlines(self.drank[self.DPF>0],self.DPF[self.DPF>0],maxDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.DPF<0],self.DPF[self.DPF<0],minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.DPF==0],maxDPF,minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
 
 
     marker='-o'
@@ -1572,20 +1623,24 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
         marker='s'
         fmt='s'
         markersize=3
-
-        ax1.vlines(self.drank,0,self.smoothDPF,colors="#4287f5",alpha=0.95,linewidth = 2)
-        title="First Difference of the Mass Probability Function (cond. to presence)"
         if (kind=='smoothDPF'):
-            title="Regularized Difference of the Mass Probability Function (cond. to presence)"
+            ax1.vlines(self.drank,0,self.smoothDPF,colors="#4287f5",alpha=0.95,linewidth = 1)
+        else:
+            ax1.vlines(self.drank,0,self.DPF,colors="#4287f5",alpha=0.95,linewidth = 1)
+        if(title=='default'):
+                title="First Difference of the Mass Probability Function"
+                if (kind=='smoothDPF'):
+                    title="Regularized Difference of the Mass Probability Function"
 
     ax1.set_title(title,va='baseline')
 
     #TOC thresholds
     if (kind=='smoothDPF'):
-        #print('marker',marker)
-        ax1.plot(self.drank,self.DPF,  marker,markersize = markersize-1,label = 'Original DPF', linewidth = 0.25,color = "#b7bec9")
-        ax1.plot(self.drank,self.smoothDPF,  marker,markersize = markersize,label = 'Smoothed DPF', linewidth = 1,color = "#4287f5")
-                #ax1.plot(self.drank,self.smoothPF,marker,markersize = markersize,label = 'Smoothed PF', linewidth = 1,color = "#4287f5")
+        ##print('marker',marker)
+        #ax1.plot(self.drank,self.DPF,  marker,markersize = markersize-1,label = 'Original DPF', linewidth = 0.25,color = "#b7bec9")
+        #ax1.plot(self.drank,self.smoothDPF,  marker,markersize = markersize,label = 'Smoothed DPF', linewidth = 1,color = "#4287f5")
+        #ax1.plot(self.drank,self.DPF,marker='s',markersize =0,label = 'Original DPF', linewidth = 0.25,color = "#fa4807" ,alpha=0.5)
+        ax1.plot(self.drank,self.smoothDPF,marker='s',markersize = 0.5,label = 'Smoothed DPF', linewidth = 1,color = "#4287f5",alpha=1)
     else:
         ax1.plot(self.drank,self.DPF,marker,markersize = markersize,label = TOCname, linewidth = 1,color = "#4287f5")
 
@@ -1593,10 +1648,10 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
         i1=np.argmax(self.CDF>0.25)
         i2=np.argmax(self.CDF>0.5)
         i3=np.argmax(self.CDF>0.75)
-        ax1.fill_between(self.drank[0:i1+1],self.DPF[0:i1+1],color='#6042f5',alpha=0.5)
-        ax1.fill_between(self.drank[i1:i2+1],self.DPF[i1:i2+1],color='#c242f5',alpha=0.5)
-        ax1.fill_between(self.drank[i2:i3+1],self.DPF[i2:i3+1],color='#fc0303',alpha=0.5)
-        ax1.fill_between(self.drank[i3:],self.DPF[i3:],color='#c6fc03',alpha=0.5)
+        ax1.fill_between(self.drank[0:i1+1],self.DPF[0:i1+1],color='#fc9d03',alpha=0.5)
+        ax1.fill_between(self.drank[i1:i2+1],self.DPF[i1:i2+1],color='#fc0703',alpha=0.5)
+        ax1.fill_between(self.drank[i2:i3+1],self.DPF[i2:i3+1],color='#ca03fc',alpha=0.5)
+        ax1.fill_between(self.drank[i3:],self.DPF[i3:],color='#016e32',alpha=0.5)
 
     if ('boostrapCI' in options):
         if (not self.boostrapFlag):
@@ -1641,12 +1696,20 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
 
 
 
-def __plotRaster(self,filename = '',title='default',TOCname='Raster',kind='raster',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotRaster(self,filename = '',title='default',TOCname='Raster',kind='raster',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
+    import matplotlib as mpl
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
 
-    plot=plt.imshow(self.raster, cmap='RdBu')
+
+    cmap = mpl.colormaps['RdBu']  # viridis is the default colormap for imshow
+    if ('binary' in options):
+        #cmap = mpl.colors.ListedColormap(['#67001f', '#053061'])
+        cmap = mpl.colors.ListedColormap(['red', '#053061'])
+
+    cmap.set_bad(color='gray')
+    plot=plt.imshow(self.raster, cmap=cmap)
     plt.colorbar()
     plt.minorticks_on()
     tlabel=TOCname
@@ -1665,27 +1728,16 @@ def __plotRaster(self,filename = '',title='default',TOCname='Raster',kind='raste
     plt.close("all")
 
 
-def __plotHist(self,filename = '',title='default',TOCname='Raster',kind='raster',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def __plotHist(self,filename = '',title='default',TOCname='Raster',kind='raster',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
     from matplotlib.ticker import MaxNLocator, FuncFormatter, AutoMinorLocator
     if (not self.boostrapFlag):
         self.boostrapCI()
-    #plot=plt.imshow(self.raster, cmap='RdBu')
-    #plt.colorbar()
-    #plt.minorticks_on()
-    #tlabel=TOCname
-    #if (TOCname=='Raster'):
-        #tlabel='$Rank=$'+self.featureName
-
-    #plt.title(tlabel,loc='center')
 
     height, bins, patches =plt.hist(self.boostrapAreas,15,color='#9c0505')
     plt.title("Histogram of bootstrap area ratios of the TOC")
     plt.fill_betweenx([0, height.max()], self.CIminArea, self.CImaxArea, color='#ff0303', alpha=0.1)
-
-
-
 
     if (filename!=''):
         plt.savefig(filename,dpi=dpi)
@@ -1703,7 +1755,7 @@ def __plotHist(self,filename = '',title='default',TOCname='Raster',kind='raster'
 ##########################################BEGIN METHOD plot#####################################################
 
 #This function plots the TOC to the terminal or to a file
-def plot(self,filename = '',title='default',TOCname='default',kind='None',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array([''])):
+def plot(self,filename = '',title='default',TOCname='default',kind='None',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
     """
     A generic plot function for all the kind of TOCs.  All the parameters are optional. If ``filename`` is not given it plots to a window, otherwise it is a png file.
 
@@ -1732,31 +1784,31 @@ def plot(self,filename = '',title='default',TOCname='default',kind='None',height
     if (kind=='continuous' or kind=='semicontinuous' or kind=='forcedContinuous' or kind=='discrete'):
         if (TOCname=='default'):
             TOCname=kind+" TOC"
-        self.__plotTOC(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotTOC(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='discretization'):
         if (TOCname=='default'):
             TOCname="Discrete approx. of the TOC"
-        self.__plotDiscretizedTOC(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotDiscretizedTOC(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='CDF'):
         if (TOCname=='default'):
-            TOCname="Cummulatve Distribution Function"
-        self.__plotCDF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+            TOCname="Cumulatve Distribution Function"
+        self.__plotCDF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='PF' or kind=='smoothPF'):
         if (TOCname=='default'):
             TOCname=kind
-        self.__plotPF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotPF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='DPF' or kind=='smoothDPF'):
         if (TOCname=='default'):
             TOCname=kind
-        self.__plotDPF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotDPF(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='raster'):
         if (TOCname=='default'):
             TOCname='Raster'
-        self.__plotRaster(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotRaster(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
     if (kind=='histogram'):
         if (TOCname=='default'):
             TOCname='Histogram'
-        self.__plotHist(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options)
+        self.__plotHist(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
 
 ##########################################END METHOD plot#######################################################
 
@@ -1771,6 +1823,7 @@ TOCPF.computePF=computePF
 TOCPF.centeredDF=centeredDF
 TOCPF.PFsmoothing=PFsmoothing
 TOCPF.RLS=RLS
+TOCPF.meanWindowSmoothing=meanWindowSmoothing
 TOCPF.integrateTrapezoidal=integrateTrapezoidal
 TOCPF.rank2prob=rank2prob
 TOCPF.areaComputationBoostrap=areaComputationBoostrap
