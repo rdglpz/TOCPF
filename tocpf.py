@@ -620,6 +620,13 @@ def PFsmoothing(self,method='RLS',PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDF
             return x[np.argmax(np.abs(x))]
 
         self.smoothDPF=self.meanWindowSmoothing(self.drank,self.DPF,self.ndiscretization,-1,mfunc)
+    
+    elif (method == "ANN"):
+        """
+        Artificial Neural Networks
+        """
+
+
 
 
 
