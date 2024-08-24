@@ -12,6 +12,7 @@ import tocpf as toc
 import pandas as pd
 import numpy as np
 import importlib
+importlib.reload(toc)
 import matplotlib.pyplot as plt
 from scipy.stats import lognorm
 import statsmodels.api as sm
@@ -20,8 +21,8 @@ from scipy.stats import normaltest
 import os
 import time
 #Loading training data,  
-dataY=pd.read_csv('../data/Morelia_train_Y.csv')
-dataX=pd.read_csv('../data/Morelia_train_X.csv')
+dataY=pd.read_csv('../data/processed/Morelia/Morelia_train_Y.csv')
+dataX=pd.read_csv('../data/processed/Morelia/Morelia_train_X.csv')
 lat=dataX.lon.to_numpy()
 lon=dataX.lat.to_numpy()
 label=dataY.incremento_urbano.to_numpy()
@@ -35,13 +36,16 @@ label=dataY.incremento_urbano.to_numpy()
 #feature=dataX.dist_vegetacion.to_numpy()
 #feature=dataX.dist_centro.to_numpy()
 #feature=dataX.dist_carreteras.to_numpy()
+
 feature=dataX.costo.to_numpy()
 
 ####################################################################
 ##--Fisrt part, TOC and probability density function computation--##
 importlib.reload(toc)
 tstart = time.time()
-T=toc.TOCPF(rank=feature,groundtruth=label)
+T=toc.TOCPF(rank=feature, groundtruth=label)
+
+
 tend = time.time()
 print("Elapsed time for computing the TOC, find an adequate discretization, computing CDF,PF, DPF and their smooth versions:",tend-tstart, "seconds")
 
@@ -57,6 +61,10 @@ T.plot(kind='smoothDPF') #Smoothed Probability function
 T.plot(kind='smoothPF',options=['quartiles']) #Smoothed Probability function
 T.plot(kind='smoothPF',options=['quartiles','vlines']) #Smoothed Probability function
 T.plot(kind='smoothDPF',options=['quartiles']) #Smoothed Probability function
+
+# T.plot(kind='realTOC',options=['quartiles']) #Smoothed Probability function
+# T.plot(kind='realDTOC',options=['quartiles']) #Smoothed Probability function
+# T.plot(kind='realDDTOC',options=['quartiles']) #Smoothed Probability function
 
 
 #Assingning probabilities to a set of ranks in a raster
@@ -103,15 +111,6 @@ T.plot(kind='smoothDPF',options=['quartiles','boostrapCI']) #Smoothed Probabilit
 #Computing a boostrap confidence interval for the area
 T.boostrapCI(nboostrap=1000,CImin=0.02,CImax=0.98)
 T.plot(kind='histogram')
-
-
-
-
-
-
-
-
-
 
 
 T.kind #Discrete or continuous

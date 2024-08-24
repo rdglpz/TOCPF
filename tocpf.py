@@ -6,12 +6,15 @@
 #Centro de Investigación en Ciencias de Información Geoespacial AC
 #Querétaro, México.
 import numpy as np
+import tensorflow as tf
 import math
 import scipy.linalg as la
 import copy
 import gc
 import rasterio
 from rasterio.transform import from_origin
+
+#import annfit as af
 #from rasterio import CRS
 
 
@@ -192,6 +195,8 @@ class TOCPF:
         _`__init__`
         Constructor of the TOC. Here the hits and false alarms are computed, as well as the kind (discrete, continuous, semicontinuous), the `Area`_  and `areaRatio`_ according to the definition in the documentation.
         """
+
+        #validating rank, groundtruth pairs. They can never be 0 and unequal
         if (len(rank)!=0 and len(groundtruth)!=0 and len(rank)==len(groundtruth)):
             self.maxr=np.max(rank)
             """
@@ -202,13 +207,16 @@ class TOCPF:
             _`maxgt` is the maximal (groundtruth) label value, it is usuaaly 1, it is a member of the TOCPF object.
             """
             self.minr=np.min(rank)
+            
             """
             _`minr` is the minimal rank value, it is a member of the TOCPF object.
             """
+            
             self.mingt=np.min(groundtruth)
             """
             _`mingt` is the minimal (groundtruth) label value, it is usuaaly 0, it is a member of the TOCPF object.
             """
+            
             self.rank=rank
             """
             stores the rank values.
@@ -243,6 +251,9 @@ class TOCPF:
             #self.continuity()
             self.areaComputation()
             self.computePF()
+
+            # default parameters def PFsmoothing(self, method='RLS', PFsmoothingFactor=-1, 
+            # DPFsmoothingFactor=-1, CDFsmoothingFactor=-1, dHitssmoothingFactor=-1 ): 
             self.PFsmoothing()
     pass
 
@@ -595,9 +606,11 @@ def bestPercent(self,X,PF,n, percent):
 
 ########################################END METHOD computePF####################################################
 
-def PFsmoothing(self,method='RLS',PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDFsmoothingFactor=-1,dHitssmoothingFactor=-1 ):
+def PFsmoothing(self, method='wmeans', PFsmoothingFactor=-1, DPFsmoothingFactor=-1, CDFsmoothingFactor=-1, dHitssmoothingFactor=-1 ): 
+    # Aqui podemos implementar recepción de argumentos variables con kwargs o un diccionario https://python-intermedio.readthedocs.io/es/latest/args_and_kwargs.html
+    
 
-    if (method=='RLS'):
+    if (method == 'RLS'):
         if (dHitssmoothingFactor==-1):
             dHitssmoothingFactor=self.smoothingFactor*2
         if (CDFsmoothingFactor==-1):
@@ -626,6 +639,26 @@ def PFsmoothing(self,method='RLS',PFsmoothingFactor=-1,DPFsmoothingFactor=-1,CDF
         Artificial Neural Networks
         """
 
+        rank = self.HpFA[self.iunique] #indices que apuntan a los ranks unicos
+        hits = self.Hits[self.iunique]
+        #R = self.rank[~self.idiscontinuous] #indices que apuntan a los ranks unicos
+
+        #X, Y, DY, DDY = self.fitNN(rank, hits)
+        X, Y, DY, DDY = self.fitNN(self.drank, self.dHits)
+        self.smoothdHits = Y
+        self.smoothCDF = Y/Y[-1]
+        self.smoothPF = DY/(np.mean(DY)*(np.max(self.drank) - np.min(self.drank)))
+        #(Y[:(n-1)]+Y[1:])*(X[1:]-X[:(n-1)])/2
+        self.smoothDPF = DDY
+
+
+
+        #allX, rh, drh, ddrh = self.fitNN(X, Y)
+
+        #self.smoothdHits = rh
+        #self.smoothCDF = rh
+        #self.smoothPF = drh
+        #self.smoothAttractiveness = ddrh
 
 
 
@@ -674,7 +707,10 @@ def meanWindowSmoothing(self,X,Y,n,smoothingFactor=-1,mfunction=np.mean):
     return Yg
 
 
-def RLS(self,X,Y,n,smoothingFactor=-1):
+def RLS(self, X, Y, n, smoothingFactor=-1):
+    """
+    
+    """
     mixx=np.min(X)
     maxx=np.max(X)
     miyy=np.min(Y)
@@ -726,6 +762,74 @@ def RLS(self,X,Y,n,smoothingFactor=-1):
         ite+=1
         areaYg=np.sum(np.abs(0.5*(Yg[:-1]+Yg[1:])*(X[1:]-X[:-1])))
     return Yg
+
+def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoid", "sigmoid"]):
+    
+    #intepolacion lineal para tener valores en cada TPpFP
+    #0,5,10
+    #X = 0,1,2,3,4,5,6,7,8,9,10
+    #sigmoidal expand tails for reinforce learning at those extremes
+    stail = 100000
+    #Xinterp = np.arange(0, len(X))
+    Xinterp = ((np.arange(0, len(X)))*(np.max(X)-np.min(X))/len(X))[:-1]
+    Yinterp = np.interp(Xinterp, X, Y)
+
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(
+        # Stop training when `val_loss` is no longer improving
+        monitor="val_loss",
+        # "no longer improving" being defined as "no better than 1e-2 less"
+        min_delta=1e-6,
+        # "no longer improving" being further defined as "for at least 10 epochs"
+        patience = 10,
+        verbose=1,
+        )
+    ]
+
+    X_train_e = np.concatenate((np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
+    Y_train_e = np.concatenate((np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
+
+    #Normalized TOC
+    X_train = X_train_e/X[-1]
+    Y_train = Y_train_e/Y[-1]
+
+    X_train_s = X_train[::2]
+    Y_train_s = Y_train[::2]
+
+    X_valid_s = X_train[1:][::2]
+    Y_valid_s = Y_train[1:][::2]
+
+    model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(1,)),        # Input layer of size 1
+    tf.keras.layers.Dense(structure[0], input_dim = 1, activation= afunctions[0]),                    
+    tf.keras.layers.Dense(structure[1], input_dim = structure[0], activation=afunctions[1]),                  
+    tf.keras.layers.Dense(structure[2], input_dim = structure[1], activation= afunctions[2]),                   
+    tf.keras.layers.Dense(1, input_dim = structure[2], activation='linear')
+    ])
+
+        # Compile the model
+    model.compile(optimizer = 'adam',  loss = "mse") 
+
+    # Train the model
+    model.fit(X_train_s, Y_train_s, validation_data=(X_valid_s, Y_valid_s), epochs=500*2, callbacks=callbacks, verbose=1, batch_size=50)         
+    
+    #regresar la predicción el dominio en las coordenadas de X
+    yhat = model.predict(X_train)
+    realHits = yhat*Y[-1]
+
+    input_data = tf.convert_to_tensor(X_train)
+    output = tf.convert_to_tensor(Y_train)
+    with tf.GradientTape() as tape2:
+        tape2.watch(input_data)
+        with tf.GradientTape() as tape1:
+            tape1.watch(input_data)
+            output = model(input_data)
+        first_derivative = tape1.gradient(output, input_data)
+    second_derivative = tape2.gradient(first_derivative, input_data)    
+
+
+    return Xinterp, realHits[stail:-stail+1], first_derivative[stail:-stail+1], second_derivative[stail:-stail+1]
+
 
 
 
@@ -1145,7 +1249,6 @@ def tickPositions(self,sorted_ranks,Thresholds, HpFA, n = 30):
 #########################################END METHOD tickPositions####################################################
 
 
-
 ##########################################BEGIN METHOD __plotTOC#####################################################
 
 def __plotTOC(self,filename = '',title='default',TOCname='TOC',kind='TOC',height=800,width=920,dpi=120,xlabel="default",ylabel="default",autodpi=True,options=np.array(['']),labelsize=7):
@@ -1484,6 +1587,7 @@ def __plotPF(self,filename = '',title='default',TOCname='PF',kind='PF',height=80
         else:
             title = "Probability Density Function (conditional to presence)"
 
+
     ax1.set_ylim(0, 1.01*np.max(self.PF))
     ax1.set_xlim(self.minr-0.01*(self.maxr-self.minr),self.maxr)
     ax1.tick_params(labelsize=labelsize)
@@ -1817,6 +1921,7 @@ def plot(self,filename = '',title='default',TOCname='default',kind='None',height
             TOCname='Histogram'
         self.__plotHist(filename,title,TOCname,kind,height,width,dpi,xlabel,ylabel,autodpi,options,labelsize)
 
+
 ##########################################END METHOD plot#######################################################
 
 
@@ -1830,6 +1935,7 @@ TOCPF.computePF=computePF
 TOCPF.centeredDF=centeredDF
 TOCPF.PFsmoothing=PFsmoothing
 TOCPF.RLS=RLS
+TOCPF.fitNN=fitNN
 TOCPF.meanWindowSmoothing=meanWindowSmoothing
 TOCPF.integrateTrapezoidal=integrateTrapezoidal
 TOCPF.rank2prob=rank2prob
