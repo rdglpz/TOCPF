@@ -606,7 +606,7 @@ def bestPercent(self,X,PF,n, percent):
 
 ########################################END METHOD computePF####################################################
 
-def PFsmoothing(self, method='wmeans', PFsmoothingFactor=-1, DPFsmoothingFactor=-1, CDFsmoothingFactor=-1, dHitssmoothingFactor=-1 ): 
+def PFsmoothing(self, method='ANN', PFsmoothingFactor=-1, DPFsmoothingFactor=-1, CDFsmoothingFactor=-1, dHitssmoothingFactor=-1 ):
     # Aqui podemos implementar recepción de argumentos variables con kwargs o un diccionario https://python-intermedio.readthedocs.io/es/latest/args_and_kwargs.html
     
 
@@ -638,32 +638,27 @@ def PFsmoothing(self, method='wmeans', PFsmoothingFactor=-1, DPFsmoothingFactor=
         """
         Artificial Neural Networks
         """
-
-        rank = self.HpFA[self.iunique] #indices que apuntan a los ranks unicos
-        hits = self.Hits[self.iunique]
+        #rank = self.HpFA[self.iunique] #indices que apuntan a los ranks unicos
+        #hits = self.Hits[self.iunique]
         #R = self.rank[~self.idiscontinuous] #indices que apuntan a los ranks unicos
 
         #X, Y, DY, DDY = self.fitNN(rank, hits)
         X, Y, DY, DDY = self.fitNN(self.drank, self.dHits)
-        self.smoothdHits = Y
-        self.smoothCDF = Y/Y[-1]
-        self.smoothPF = DY/(np.mean(DY)*(np.max(self.drank) - np.min(self.drank)))
+        maxY=np.max(np.array(Y))
+        self.smoothdHits = np.array(Y)
+        self.smoothCDF = np.array(Y)/maxY
+        if (self.kind=='continuous'):
+            integ=(np.mean(np.array(DY))*(np.max(self.drank) - np.min(self.drank)))
+        else:
+            integ=np.sum(DY)
+        self.smoothPF = np.array(DY)/integ
         #(Y[:(n-1)]+Y[1:])*(X[1:]-X[:(n-1)])/2
-        self.smoothDPF = DDY
-
-
-
+        self.smoothDPF = np.array(DDY)/integ
         #allX, rh, drh, ddrh = self.fitNN(X, Y)
-
         #self.smoothdHits = rh
         #self.smoothCDF = rh
         #self.smoothPF = drh
         #self.smoothAttractiveness = ddrh
-
-
-
-
-
     else:
         print("method=",method,"is not implemented!")
 
@@ -763,35 +758,73 @@ def RLS(self, X, Y, n, smoothingFactor=-1):
         areaYg=np.sum(np.abs(0.5*(Yg[:-1]+Yg[1:])*(X[1:]-X[:-1])))
     return Yg
 
+
+
+
 def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoid", "sigmoid"]):
-    
+
     #intepolacion lineal para tener valores en cada TPpFP
     #0,5,10
     #X = 0,1,2,3,4,5,6,7,8,9,10
     #sigmoidal expand tails for reinforce learning at those extremes
-    stail = 100000
+    #stail = 1000000
+    maxX=np.max(X)
+    maxY=np.max(Y)
+    minX=np.min(X)
     #Xinterp = np.arange(0, len(X))
-    Xinterp = ((np.arange(0, len(X)))*(np.max(X)-np.min(X))/len(X))[:-1]
+    Xinterp = ((np.arange(0, 2*len(X)+1))*(maxX-minX)/(2*len(X)))
     Yinterp = np.interp(Xinterp, X, Y)
+
 
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
         # Stop training when `val_loss` is no longer improving
         monitor="val_loss",
         # "no longer improving" being defined as "no better than 1e-2 less"
-        min_delta=1e-6,
+        min_delta=1e-7,
         # "no longer improving" being further defined as "for at least 10 epochs"
-        patience = 10,
+        patience = 50,
         verbose=1,
         )
     ]
+    #print("Jelou")
 
-    X_train_e = np.concatenate((np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
-    Y_train_e = np.concatenate((np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
+    #X_train_e = np.concatenate((np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
+    #Y_train_e = np.concatenate((np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
 
+    Dx0=Xinterp[1]-Xinterp[0]
+    Dy0=Yinterp[1]-Yinterp[0]
+    Dx1=Xinterp[-1]-Xinterp[-2]
+    Dy1=Yinterp[-1]-Yinterp[-2]
+    X_train_e=Xinterp
+    Y_train_e=Yinterp
+    for i in range(max(int(0.05*len(Xinterp)),10)):
+        X_train_e = np.append(Xinterp[0]-float(i)*Dx0,X_train_e)
+        Y_train_e = np.append(Yinterp[0]-float(i)*Dy0,Y_train_e)
+        X_train_e = np.append(X_train_e ,X_train_e[-1]+float(i)*Dx1)
+        Y_train_e = np.append(Y_train_e ,Y_train_e[-1]+float(i)*Dy1)
+
+    self.ntrain=len(X_train_e)
+    #X_train_e = np.append(Xinterp[0]-2*Dx0,Xinterp)
+
+    #X_train_e = np.append(X_train_e ,Xinterp[-1]+Dx1)
+    #X_train_e = np.append(X_train_e ,Xinterp[-1]+2*Dx1)
+        ##(np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
+    #Y_train_e = np.append(Yinterp[0]-Dy0,Yinterp)
+    #Y_train_e = np.append(Yinterp[0]-2*Dy0,Yinterp)
+    #Y_train_e = np.append(Y_train_e ,Yinterp[-1]+Dy1)
+    #Y_train_e = np.append(Y_train_e ,Yinterp[-1]+2*Dy1)
+    #Y_train_e = np.concatenate(Yinterp[0]-Dy0,Yinterp,Yinterp[-1]+Dy1)
+        #(np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
+
+
+    #print(len(X))
+    #print(len(Y))
+    #print(len(X_train_e))
+    #print(len(Y_train_e))
     #Normalized TOC
-    X_train = X_train_e/X[-1]
-    Y_train = Y_train_e/Y[-1]
+    X_train = X_train_e/maxX
+    Y_train = Y_train_e/maxY
 
     X_train_s = X_train[::2]
     Y_train_s = Y_train[::2]
@@ -801,36 +834,37 @@ def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoi
 
     model = tf.keras.Sequential([
     tf.keras.layers.Input(shape=(1,)),        # Input layer of size 1
-    tf.keras.layers.Dense(structure[0], input_dim = 1, activation= afunctions[0]),                    
-    tf.keras.layers.Dense(structure[1], input_dim = structure[0], activation=afunctions[1]),                  
-    tf.keras.layers.Dense(structure[2], input_dim = structure[1], activation= afunctions[2]),                   
+    tf.keras.layers.Dense(structure[0], input_dim = 1, activation= afunctions[0]),
+    tf.keras.layers.Dense(structure[1], input_dim = structure[0], activation=afunctions[1]),
+    tf.keras.layers.Dense(structure[2], input_dim = structure[1], activation= afunctions[2]),
     tf.keras.layers.Dense(1, input_dim = structure[2], activation='linear')
     ])
 
         # Compile the model
-    model.compile(optimizer = 'adam',  loss = "mse") 
+    model.compile(optimizer = 'adam',  loss = "mse")
 
     # Train the model
-    model.fit(X_train_s, Y_train_s, validation_data=(X_valid_s, Y_valid_s), epochs=500*2, callbacks=callbacks, verbose=1, batch_size=50)         
-    
-    #regresar la predicción el dominio en las coordenadas de X
-    yhat = model.predict(X_train)
-    realHits = yhat*Y[-1]
+    #model.fit(X_train_s, Y_train_s, validation_data=(X_valid_s, Y_valid_s), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train_s)/10))
+    model.fit(X_train, Y_train, validation_data=(X_train, Y_train), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train)/10))
 
-    input_data = tf.convert_to_tensor(X_train)
-    output = tf.convert_to_tensor(Y_train)
+
+    #regresar la predicción el dominio en las coordenadas de X
+
+    yhat = model.predict(X/maxX)
+    realHits = yhat*maxY
+    #print(realHits)
+    input_data = tf.convert_to_tensor(X/maxX)
+    output = tf.convert_to_tensor(Y/maxY)
     with tf.GradientTape() as tape2:
         tape2.watch(input_data)
         with tf.GradientTape() as tape1:
             tape1.watch(input_data)
             output = model(input_data)
         first_derivative = tape1.gradient(output, input_data)
-    second_derivative = tape2.gradient(first_derivative, input_data)    
+    second_derivative = tape2.gradient(first_derivative, input_data)
 
 
-    return Xinterp, realHits[stail:-stail+1], first_derivative[stail:-stail+1], second_derivative[stail:-stail+1]
-
-
+    return np.array(X), np.array(realHits), np.array(first_derivative), np.array(second_derivative)
 
 
 
@@ -1707,8 +1741,10 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
             title = "Smoothed First Derivative of the Probability Density Function"
         else:
             title = "First Derivative of the Probability Density Function"
-
-    ax1.set_ylim(1.01*min(minDPF,minSmoothDPF), 1.01*max(maxDPF,maxSmoothDPF))
+    if (kind=='smoothDPF'):
+        ax1.set_ylim(1.01*minSmoothDPF, 1.01*maxSmoothDPF)
+    else:
+        ax1.set_ylim(1.01*minDPF, 1.01*maxDPF)
     ax1.set_xlim(self.minr-0.01*(self.maxr-self.minr),self.maxr)
     ax1.tick_params(labelsize=labelsize)
 
@@ -1718,9 +1754,9 @@ def __plotDPF(self,filename = '',title='default',TOCname='CDF',kind='CDF',height
 
     if ('vlines' in options):
         if (kind=='smoothDPF'):
-            ax1.vlines(self.drank[self.smoothDPF>0],self.smoothDPF[self.smoothDPF>0],maxDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
-            ax1.vlines(self.drank[self.smoothDPF<0],self.smoothDPF[self.smoothDPF<0],minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
-            ax1.vlines(self.drank[self.smoothDPF==0],maxDPF,minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.smoothDPF>0],self.smoothDPF[self.smoothDPF>0],maxSmoothDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.smoothDPF<0],self.smoothDPF[self.smoothDPF<0],minSmoothDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
+            ax1.vlines(self.drank[self.smoothDPF==0],maxSmoothDPF,minSmoothDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
         else:
             ax1.vlines(self.drank[self.DPF>0],self.DPF[self.DPF>0],maxDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)
             ax1.vlines(self.drank[self.DPF<0],self.DPF[self.DPF<0],minDPF,colors="tab:gray",alpha=0.45,linewidth = 0.3)

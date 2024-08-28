@@ -28,19 +28,28 @@ label=dataY.incremento_urbano.to_numpy()
 
 #Distance to urban land
 feature=dataX.dist_urbano.to_numpy()
+
 importlib.reload(toc)
 T=toc.TOCPF(rank=feature,groundtruth=label)
-T.featureName='Distance to urban land'
-T.plot(filename='TOC-dist2UL.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+#T.PFsmoothing(method='ANN')
+#T.plot(kind='smoothPF',filename='smoothPF-dist2UL.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+#T.plot(kind='smoothDPF',filename='smoothDPF-dist2UL.png',title='Derivative of the PDF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
+#T.featureName='Distance to urban land'
+#T.plot(filename='TOC-dist2UL.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
 
 
 
-T.plot(kind='CDF',filename='CDF-dist2UL.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8)
-T.PFsmoothing(method='wmeans')
+#T.plot(kind='CDF',filename='CDF-dist2UL.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8)
+#T.PFsmoothing(method='wmeans')
+#T.PFsmoothing(method='ANN')
+
 T.plot(kind='PF',filename='PF-dist2UL.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 T.plot(kind='DPF',filename='DPF-dist2UL.png',title="First Derivative of the PDF",height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
 T.plot(kind='smoothPF',filename='smoothPF-dist2UL.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 T.plot(kind='smoothDPF',filename='smoothDPF-dist2UL.png',title='Derivative of the PDF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
 prob=T.rank2prob(feature)
 T.rasterize(prob,lat,lon)
 T.plot(kind='raster',TOCname='Cond. Prob. of Distance to UL given Presence of ULC',filename='rasterP-dist2UL.png',height=1800,width=1800,dpi=300)
@@ -57,15 +66,21 @@ feature=dataX.pendiente.to_numpy()
 importlib.reload(toc)
 T=toc.TOCPF(rank=feature,groundtruth=label)
 T.featureName='Terrain slope'
+T.plot(kind='smoothPF',filename='smoothPF-slope.png',title='Mass Probability Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+T.plot(kind='smoothDPF',filename='smoothDPF-slope.png',title='Difference of the MPF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
 T.plot(filename='TOC-slope.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
 
 
 T.plot(kind='CDF',filename='CDF-slope.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8)
-T.PFsmoothing(method='wmeans')
+#T.PFsmoothing(method='wmeans')
+#T.PFsmoothing(method='ANN')
 T.plot(kind='PF',filename='PF-slope.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 T.plot(kind='DPF',filename='DPF-slope.png',title="First Difference of the PDF",height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
 T.plot(kind='smoothPF',filename='smoothPF-slope.png',title='Mass Probability Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 T.plot(kind='smoothDPF',filename='smoothDPF-slope.png',title='Difference of the MPF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
 prob=T.rank2prob(feature)
 T.rasterize(prob,lat,lon)
 T.plot(kind='raster',TOCname='Cond. Prob. of Terrain Slope given Presence of ULC',filename='rasterP-slope.png',height=1800,width=1800,dpi=300)
@@ -84,13 +99,18 @@ T=toc.TOCPF(rank=feature,groundtruth=label)
 T.featureName='Traveling time to the city center'
 T.plot(filename='TOC-ttime.png',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
 
+T.plot(kind='PF',filename='PF-ttime-before-smoothing.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+T.plot(kind='DPF',filename='DPF-ttime-before-smoothing.png',title="First Derivative of the PDF",height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
 
 T.plot(kind='CDF',filename='CDF-ttime.png',height=1800,width=1520,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8)
-T.PFsmoothing(method='wmeans')
+#T.PFsmoothing(method='wmeans')
+#T.PFsmoothing(method='ANN')
 T.plot(kind='PF',filename='PF-ttime.png',title='Probability Density Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
-T.plot(kind='DPF',filename='DPF-ttime.png',title="First Difference of the PDF",height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
-T.plot(kind='smoothPF',filename='smoothPF-ttime.png',title='Mass Probability Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
-T.plot(kind='smoothDPF',filename='smoothDPF-ttime.png',title='Difference of the MPF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+T.plot(kind='DPF',filename='DPF-ttime.png',title="First Derivative of the PDF",height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
+T.plot(kind='smoothPF',filename='smoothPF-ttime.png',title='Density Probability Function cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+T.plot(kind='smoothDPF',filename='smoothDPF-ttime.png',title='Difference of the DPF cond. to Presence',height=1800,width=1800,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
 prob=T.rank2prob(feature)
 T.rasterize(prob,lat,lon)
 T.plot(kind='raster',TOCname='Cond. Prob. of Traveling Time given Presence of ULC',filename='rasterP-ttime.png',height=1800,width=1800,dpi=300)
