@@ -128,7 +128,30 @@ T.plot(kind='raster',TOCname='Simulation of ULC using combined prob',filename='r
 
 
 
-1/(self.maxr-self.minr)
+
+
+
+
+
+
+importlib.reload(toc)
+feature=dataX.dist_agua.to_numpy()
+T=toc.TOCPF(rank=feature,groundtruth=label)
+T.featureName='Distance to water bodies'
+T.plot(filename='TOC-dist2wb.png',height=1800,width=2000,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+T.plot(kind='smoothPF',filename='PDF-example.png',title='Density Probability Function cond. to Presence',height=1800,width=2000,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+T.plot(kind='smoothDPF',filename='DPDF-example.png',title='Difference of the DPF cond. to Presence',height=1800,width=2000,dpi=300,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -619,8 +619,6 @@ def PFsmoothing(self, method='ANN', PFsmoothingFactor=-1, DPFsmoothingFactor=-1,
             PFsmoothingFactor=self.smoothingFactor
         if (DPFsmoothingFactor==-1):
             DPFsmoothingFactor=10.0*self.smoothingFactor
-            #print("Entra en el if")
-        #self.smoothdHits=self.RLS(self.dHpFA,self.dHits,self.ndiscretization,dHitssmoothingFactor)
         self.smoothdHits=self.RLS(self.drank,self.dHits,self.ndiscretization,dHitssmoothingFactor)
         self.smoothCDF=self.RLS(self.drank,self.CDF,self.ndiscretization,CDFsmoothingFactor)
         self.smoothPF=self.RLS(self.drank,self.PF,self.ndiscretization,PFsmoothingFactor)
@@ -631,34 +629,31 @@ def PFsmoothing(self, method='ANN', PFsmoothingFactor=-1, DPFsmoothingFactor=-1,
         self.smoothPF=self.meanWindowSmoothing(self.drank,self.PF,self.ndiscretization,-1)
         def mfunc(x):
             return x[np.argmax(np.abs(x))]
-
         self.smoothDPF=self.meanWindowSmoothing(self.drank,self.DPF,self.ndiscretization,-1,mfunc)
     
     elif (method == "ANN"):
         """
         Artificial Neural Networks
         """
-        #rank = self.HpFA[self.iunique] #indices que apuntan a los ranks unicos
-        #hits = self.Hits[self.iunique]
-        #R = self.rank[~self.idiscontinuous] #indices que apuntan a los ranks unicos
-
-        #X, Y, DY, DDY = self.fitNN(rank, hits)
-        X, Y, DY, DDY = self.fitNN(self.drank, self.dHits)
-        maxY=np.max(np.array(Y))
-        self.smoothdHits = np.array(Y)
-        self.smoothCDF = np.array(Y)/maxY
         if (self.kind=='continuous'):
+            X, Y, DY, DDY = self.fitNN(self.drank, self.dHits)
+            maxY=np.max(np.array(Y))
+            self.smoothdHits = np.array(Y)
+            self.smoothCDF = np.array(Y)/maxY
             integ=(np.mean(np.array(DY))*(np.max(self.drank) - np.min(self.drank)))
+            self.smoothPF = np.array(DY)/integ
+            #(Y[:(n-1)]+Y[1:])*(X[1:]-X[:(n-1)])/2
+            self.smoothDPF = np.array(DDY)/integ
         else:
-            integ=np.sum(DY)
-        self.smoothPF = np.array(DY)/integ
-        #(Y[:(n-1)]+Y[1:])*(X[1:]-X[:(n-1)])/2
-        self.smoothDPF = np.array(DDY)/integ
-        #allX, rh, drh, ddrh = self.fitNN(X, Y)
-        #self.smoothdHits = rh
-        #self.smoothCDF = rh
-        #self.smoothPF = drh
-        #self.smoothAttractiveness = ddrh
+            self.smoothdHits=self.meanWindowSmoothing(self.drank,self.dHits,self.ndiscretization,-1)
+            self.smoothCDF=self.meanWindowSmoothing(self.drank,self.CDF,self.ndiscretization,-1)
+            self.smoothPF=self.meanWindowSmoothing(self.drank,self.PF,self.ndiscretization,-1)
+            integ=np.sum(self.smoothPF)
+            self.smoothPF=self.smoothPF/integ
+            def mfunc(x):
+                return x[np.argmax(np.abs(x))]
+            self.smoothDPF=self.meanWindowSmoothing(self.drank,self.DPF,self.ndiscretization,-1,mfunc)
+
     else:
         print("method=",method,"is not implemented!")
 
@@ -768,14 +763,12 @@ def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoi
     #X = 0,1,2,3,4,5,6,7,8,9,10
     #sigmoidal expand tails for reinforce learning at those extremes
     #stail = 1000000
-    maxX=np.max(X)
-    maxY=np.max(Y)
-    minX=np.min(X)
+    maxX0=np.max(X)
+    maxY0=np.max(Y)
+    minX0=np.min(X)
     #Xinterp = np.arange(0, len(X))
-    Xinterp = ((np.arange(0, 2*len(X)+1))*(maxX-minX)/(2*len(X)))
+    Xinterp = ((np.arange(0, len(X)+1))*(maxX0-minX0)/(len(X)))+minX0
     Yinterp = np.interp(Xinterp, X, Y)
-
-
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
         # Stop training when `val_loss` is no longer improving
@@ -783,14 +776,10 @@ def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoi
         # "no longer improving" being defined as "no better than 1e-2 less"
         min_delta=1e-7,
         # "no longer improving" being further defined as "for at least 10 epochs"
-        patience = 50,
+        patience = 100,
         verbose=1,
         )
     ]
-    #print("Jelou")
-
-    #X_train_e = np.concatenate((np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
-    #Y_train_e = np.concatenate((np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
 
     Dx0=Xinterp[1]-Xinterp[0]
     Dy0=Yinterp[1]-Yinterp[0]
@@ -798,33 +787,21 @@ def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoi
     Dy1=Yinterp[-1]-Yinterp[-2]
     X_train_e=Xinterp
     Y_train_e=Yinterp
-    for i in range(max(int(0.05*len(Xinterp)),10)):
+    for i in range(max(int(0.05*len(Xinterp)),3)):
         X_train_e = np.append(Xinterp[0]-float(i)*Dx0,X_train_e)
         Y_train_e = np.append(Yinterp[0]-float(i)*Dy0,Y_train_e)
         X_train_e = np.append(X_train_e ,X_train_e[-1]+float(i)*Dx1)
         Y_train_e = np.append(Y_train_e ,Y_train_e[-1]+float(i)*Dy1)
 
     self.ntrain=len(X_train_e)
-    #X_train_e = np.append(Xinterp[0]-2*Dx0,Xinterp)
+    maxX=np.max(X_train_e)
+    maxY=np.max(Y_train_e)
+    minX=np.min(X_train_e)
+    minY=np.min(Y_train_e)
 
-    #X_train_e = np.append(X_train_e ,Xinterp[-1]+Dx1)
-    #X_train_e = np.append(X_train_e ,Xinterp[-1]+2*Dx1)
-        ##(np.arange(-stail, np.min(Xinterp)), Xinterp,np.arange(Xinterp[-1]+1, Xinterp[-1]+stail+1)))
-    #Y_train_e = np.append(Yinterp[0]-Dy0,Yinterp)
-    #Y_train_e = np.append(Yinterp[0]-2*Dy0,Yinterp)
-    #Y_train_e = np.append(Y_train_e ,Yinterp[-1]+Dy1)
-    #Y_train_e = np.append(Y_train_e ,Yinterp[-1]+2*Dy1)
-    #Y_train_e = np.concatenate(Yinterp[0]-Dy0,Yinterp,Yinterp[-1]+Dy1)
-        #(np.zeros(stail), Yinterp, np.ones(stail)*Yinterp[-1] ))
-
-
-    #print(len(X))
-    #print(len(Y))
-    #print(len(X_train_e))
-    #print(len(Y_train_e))
     #Normalized TOC
-    X_train = X_train_e/maxX
-    Y_train = Y_train_e/maxY
+    X_train = ((X_train_e-minX)/(maxX-minX))
+    Y_train = ((Y_train_e-minY)/(maxY-minY))
 
     X_train_s = X_train[::2]
     Y_train_s = Y_train[::2]
@@ -844,17 +821,17 @@ def fitNN(self, X, Y, structure = [25, 25, 25], afunctions = ["sigmoid", "sigmoi
     model.compile(optimizer = 'adam',  loss = "mse")
 
     # Train the model
-    #model.fit(X_train_s, Y_train_s, validation_data=(X_valid_s, Y_valid_s), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train_s)/10))
-    model.fit(X_train, Y_train, validation_data=(X_train, Y_train), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train)/10))
+    model.fit(X_train_s, Y_train_s, validation_data=(X_valid_s, Y_valid_s), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train_s)/10))
+    #model.fit(X_train, Y_train, validation_data=(X_train, Y_train), epochs=10000, callbacks=callbacks, verbose=1, batch_size=int(len(X_train)/10))
 
 
     #regresar la predicción el dominio en las coordenadas de X
 
-    yhat = model.predict(X/maxX)
-    realHits = yhat*maxY
+    yhat = model.predict( (X-minX)/(maxX-minX))
+    realHits = (yhat)*(maxY-minY)+minY
     #print(realHits)
-    input_data = tf.convert_to_tensor(X/maxX)
-    output = tf.convert_to_tensor(Y/maxY)
+    input_data = tf.convert_to_tensor((X-minX)/(maxX-minX))
+    #output = tf.convert_to_tensor(Y*(maxY-minY)+minY)
     with tf.GradientTape() as tape2:
         tape2.watch(input_data)
         with tf.GradientTape() as tape1:
