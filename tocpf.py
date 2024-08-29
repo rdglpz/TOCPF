@@ -686,7 +686,7 @@ def meanWindowSmoothing(self,X,Y,n,smoothingFactor=-1,mfunction=np.mean):
     Yg=np.zeros(n)
     #Smoothing the density using a mean filter, it is similar to a uniform kernel with a window size=smoothing
     if (smoothingFactor==-1):
-        nw=min(max(int(n/5),50),300)
+        nw=min(int(n/2),200)
         smoothing=int(n/nw)
         #density.smwindow=smoothing
     if (smoothing>0):
