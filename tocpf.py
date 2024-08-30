@@ -190,7 +190,7 @@ class TOCPF:
     CImin=0.05
     CImax=0.95
 
-    def __init__(self,rank=[], groundtruth=[], ndiscretization=-1, forceContinuity=True,smoothingMethod='RLS'):
+    def __init__(self,rank=[], groundtruth=[], ndiscretization=-1, forceContinuity=True,smoothingMethod='ANN'):
         """
         _`__init__`
         Constructor of the TOC. Here the hits and false alarms are computed, as well as the kind (discrete, continuous, semicontinuous), the `Area`_  and `areaRatio`_ according to the definition in the documentation.
@@ -254,7 +254,7 @@ class TOCPF:
 
             # default parameters def PFsmoothing(self, method='RLS', PFsmoothingFactor=-1, 
             # DPFsmoothingFactor=-1, CDFsmoothingFactor=-1, dHitssmoothingFactor=-1 ): 
-            self.PFsmoothing()
+            self.PFsmoothing(smoothingMethod)
     pass
 
 
@@ -1022,17 +1022,25 @@ def rank2prob(self,rank,kind='PF'):
     j=0
     deltammr=0.5*(self.maxr-self.minr)/self.ndiscretization
     for i in range(nd-1):
+        nd=0
+        jini=j
         while(j<nr  and  (rank[indices[j]])<=(self.drank[i+1])):
             if (rank[indices[j]]>=self.minr and rank[indices[j]]<=self.maxr):
                 deltar=self.drank[i]-self.drank[i-1]
+                nd=nd+1
                 prob[indices[j]]=  (DF[i+1]*(rank[indices[j]]-self.drank[i])+DF[i]*(self.drank[i+1]-rank[indices[j]]))/deltar
             elif(rank[indices[j]]<self.minr and rank[indices[j]]>=(self.minr-deltammr)):
                 prob[indices[j]]=DF[0]
+                nd=nd+1
             elif(rank[indices[j]]>self.maxr and rank[indices[j]]<=(self.maxr+deltammr)):
                 prob[indices[j]]=DF[-1]
+                nd=nd+1
             else:
                 prob[indices[j]]=0
             j+=1
+            jend=j
+        if (jini!=jend):
+            prob[indices[jini:jend]]=prob[indices[jini:jend]]/(jend-jini)
     return(prob)
 
 
@@ -1047,18 +1055,18 @@ def simulate(self,rank,nprop=1):
     else:
         nprop=int(nprop)
     nsim=0
-    while(nsim<nprop):
-        rsamples=sorted(np.random.rand(nprop-nsim))
-        j=0
-        for i in range(len(prob)):
-            while(rsamples[j]<prob[i] and j<len(rsamples)):
-                simulation[i]=1
-                j+=1
-                if (j==len(rsamples)):
-                    break
+    #while(nsim<nprop):
+    rsamples=sorted(np.random.rand(nprop-nsim))
+    j=0
+    for i in range(len(prob)):
+        while(rsamples[j]<prob[i] and j<len(rsamples)):
+            simulation[i]=1
+            j+=1
             if (j==len(rsamples)):
                 break
-        nsim=int(np.sum(simulation))
+        if (j==len(rsamples)):
+            break
+    nsim=int(np.sum(simulation))
         #print('nsim',nsim,'nprop',nprop)
     return simulation
 

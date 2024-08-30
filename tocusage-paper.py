@@ -33,17 +33,33 @@ plotdpi=300
 
 #Distance to urban land
 feature=dataX.dist_urbano.to_numpy()
+label=dataY.incremento_urbano.to_numpy()
 importlib.reload(toc)
-T=toc.TOCPF(rank=feature,groundtruth=label)
+T=toc.TOCPF(rank=feature,groundtruth=label,smoothingMethod="wmeans")
+T.plot(filename='TOC-dist2UL.png',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+
 T.plot(kind='PF',filename='PF-dist2UL.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
-T.plot(kind='DPF',filename='DPF-dist2UL.png',title="First Derivative of the PDF",height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
-T.plot(kind='smoothPF',filename='smoothPF-dist2UL.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
-T.plot(kind='smoothDPF',filename='smoothDPF-dist2UL.png',title='Derivative of the PDF cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
+
+#T.plot(kind='DPF',filename='DPF-dist2UL.png',title="First Derivative of the PDF",height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines'])
+#T.plot(kind='smoothPF',filename='smoothPF-dist2UL.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+#T.plot(kind='smoothDPF',filename='smoothDPF-dist2UL.png',title='Derivative of the PDF cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 
 prob=T.rank2prob(feature)
 T.rasterize(prob,lat,lon)
 T.plot(kind='raster',TOCname='Cond. Prob. of Distance to UL given Presence of ULC',filename='rasterP-dist2UL.png',height=plotheight,width=plotwidth,dpi=plotdpi)
-sim=T.simulate(feature,T.np)
+sim=T.simulate(feature,int(T.np))
+
+label=sim
+#dataX.dist_urbano.to_numpy()
+importlib.reload(toc)
+T=toc.TOCPF(rank=feature,groundtruth=label,smoothingMethod="wmeans")
+T.plot(filename='TOC-dist2UL-sim.png',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+T.plot(kind='PF',filename='PF-dist2UL-sim.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+
+
+
 T.rasterize(sim,lat,lon)
 T.plot(kind='raster',TOCname='Simulation of ULC using prob. of dist. to UL',filename='rasterSim-dist2UL.png',height=plotheight,width=plotwidth,dpi=plotdpi,options=['binary'])
 probDist2UL=prob
@@ -130,6 +146,30 @@ T.plot(kind='smoothDPF',filename='DPDF-example.png',title='Difference of the DPF
 
 
 
+
+#Distance to urban land
+feature=dataX.dist_agua.to_numpy()
+label=dataY.incremento_urbano.to_numpy()
+importlib.reload(toc)
+T=toc.TOCPF(rank=feature,groundtruth=label,smoothingMethod="wmeans")
+T.plot(filename='TOC-test.png',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+T.plot(kind='PF',filename='PF-test.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
+prob=T.rank2prob(feature)
+T.rasterize(prob,lat,lon)
+T.plot(kind='raster',TOCname='Cond. Prob. test given Presence of ULC',filename='rasterP-dist2UL.png',height=plotheight,width=plotwidth,dpi=plotdpi)
+
+sim=T.simulate(feature,int(T.np))
+
+#for i in range(29):
+    #sim=sim+T.simulate(feature,int(T.np))
+
+label=sim
+#np.sum(sim>15)
+#label=1*(sim>15)
+importlib.reload(toc)
+Tsim=toc.TOCPF(rank=feature,groundtruth=label,smoothingMethod="wmeans")
+Tsim.plot(filename='TOC-test-sim.png',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['intersections'])
+Tsim.plot(kind='PF',filename='PF-test-sim.png',title='Probability Density Function cond. to Presence',height=plotheight,width=plotwidth,dpi=plotdpi,xlabel="default",ylabel="default",autodpi=False,labelsize=8,options=['vlines','quartiles'])
 
 
 
